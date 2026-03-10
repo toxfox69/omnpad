@@ -26,6 +26,8 @@ import androidx.compose.ui.unit.sp
 import androidx.lifecycle.viewmodel.compose.viewModel
 import coil.compose.AsyncImage
 import com.energenai.omnpad.data.FileCategory
+import com.energenai.omnpad.data.FileConverter
+import com.energenai.omnpad.data.ExportFormat
 import com.energenai.omnpad.data.FileLoader
 import com.energenai.omnpad.ui.components.CodeEditor
 import com.energenai.omnpad.ui.components.HexViewer
@@ -49,12 +51,21 @@ fun EditorScreen(
         contract = ActivityResultContracts.OpenDocument()
     ) { uri -> uri?.let { vm.openFile(context, it) } }
 
+    var showExportMenu by remember { mutableStateOf(false) }
+    var pendingExportFormat by remember { mutableStateOf<ExportFormat?>(null) }
+
     val saveAs = rememberLauncherForActivityResult(
         contract = ActivityResultContracts.CreateDocument("*/*")
     ) { uri ->
         if (uri != null) {
-            val content = vm.activeTab?.content ?: return@rememberLauncherForActivityResult
-            FileLoader.save(context, uri, content)
+            val tab = vm.activeTab ?: return@rememberLauncherForActivityResult
+            val fmt = pendingExportFormat
+            if (fmt != null) {
+                FileConverter.convert(context, tab.content, tab.file, fmt, uri)
+                pendingExportFormat = null
+            } else {
+                FileLoader.save(context, uri, tab.content)
+            }
         }
     }
 
@@ -108,9 +119,74 @@ fun EditorScreen(
                         Icon(Icons.Default.Save, "Save", tint = Accent)
                     }
                 }
+                // Export / Convert
+                if (vm.activeTab != null) {
+                    Box {
+                        IconButton(onClick = { showExportMenu = true }) {
+                            Icon(Icons.Default.ImportExport, "Export / Convert", tint = Cyan)
+                        }
+                        DropdownMenu(
+                            expanded = showExportMenu,
+                            onDismissRequest = { showExportMenu = false },
+                            containerColor = SurfaceVariant,
+                        ) {
+                            val tab = vm.activeTab
+                            if (tab != null) {
+                                val options = FileConverter.getExportOptions(tab.file.type.category)
+                                Text(
+                                    "Export as...",
+                                    fontSize = 12.sp,
+                                    color = TextSecondary,
+                                    modifier = Modifier.padding(horizontal = 12.dp, vertical = 4.dp),
+                                )
+                                options.forEach { fmt ->
+                                    DropdownMenuItem(
+                                        text = {
+                                            Text(
+                                                "${fmt.label} (.${fmt.extension})",
+                                                color = TextPrimary,
+                                                fontSize = 14.sp,
+                                            )
+                                        },
+                                        onClick = {
+                                            showExportMenu = false
+                                            pendingExportFormat = fmt
+                                            val suggestedName = FileConverter.suggestFileName(
+                                                tab.file.name, fmt
+                                            )
+                                            saveAs.launch(suggestedName)
+                                        },
+                                        leadingIcon = {
+                                            Icon(
+                                                when (fmt) {
+                                                    ExportFormat.PDF -> Icons.Default.PictureAsPdf
+                                                    ExportFormat.DOCX -> Icons.Default.Article
+                                                    ExportFormat.XLSX -> Icons.Default.TableChart
+                                                    ExportFormat.HTML -> Icons.Default.Code
+                                                    ExportFormat.CSV -> Icons.Default.GridOn
+                                                    else -> Icons.Default.Description
+                                                },
+                                                contentDescription = null,
+                                                tint = when (fmt) {
+                                                    ExportFormat.PDF -> Magenta
+                                                    ExportFormat.DOCX -> Cyan
+                                                    ExportFormat.XLSX -> Accent
+                                                    ExportFormat.HTML -> Amber
+                                                    else -> TextSecondary
+                                                },
+                                                modifier = Modifier.size(18.dp),
+                                            )
+                                        },
+                                    )
+                                }
+                            }
+                        }
+                    }
+                }
                 // Save As
                 if (vm.activeTab != null) {
                     IconButton(onClick = {
+                        pendingExportFormat = null
                         saveAs.launch(vm.activeTab?.file?.name ?: "untitled.txt")
                     }) {
                         Icon(Icons.Default.SaveAs, "Save As", tint = TextSecondary)

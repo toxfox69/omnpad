@@ -57,9 +57,12 @@ dependencies {
     implementation("androidx.datastore:datastore-preferences:1.1.1")
 
     // Office document parsing
-    implementation("org.apache.poi:poi:5.3.0")
+    implementation("org.apache.poi:poi:5.3.0") {
+        exclude(group = "org.jetbrains", module = "annotations-java5")
+    }
     implementation("org.apache.poi:poi-ooxml:5.3.0") {
         exclude(group = "org.apache.xmlgraphics")
+        exclude(group = "org.jetbrains", module = "annotations-java5")
     }
 
     // PDF rendering — Android built-in PdfRenderer + this for text extraction

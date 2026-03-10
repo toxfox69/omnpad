@@ -5,8 +5,6 @@ import android.net.Uri
 import android.provider.OpenableColumns
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
-import org.apache.poi.hwpf.HWPFDocument
-import org.apache.poi.hwpf.extractor.WordExtractor
 import org.apache.poi.ss.usermodel.WorkbookFactory
 import org.apache.poi.xslf.usermodel.XMLSlideShow
 import org.apache.poi.xwpf.usermodel.XWPFDocument
@@ -151,11 +149,7 @@ object FileLoader {
                         sb.toString()
                     }
                     "doc" -> {
-                        val doc = HWPFDocument(stream)
-                        val extractor = WordExtractor(doc)
-                        val text = extractor.text
-                        extractor.close()
-                        text
+                        "[Legacy .doc format — save as .docx to edit]"
                     }
                     "xlsx", "xls" -> {
                         val wb = WorkbookFactory.create(stream)
@@ -202,14 +196,16 @@ object FileLoader {
             context.contentResolver.openInputStream(uri)?.use { stream ->
                 val sb = StringBuilder("Archive contents:\n\n")
                 val buffered = java.io.BufferedInputStream(stream)
-                val archive = org.apache.commons.compress.archivers.ArchiveStreamFactory()
-                    .createArchiveInputStream(buffered)
-                var entry = archive.nextEntry
+                val factory = org.apache.commons.compress.archivers.ArchiveStreamFactory()
+                val archive: org.apache.commons.compress.archivers.ArchiveInputStream<out org.apache.commons.compress.archivers.ArchiveEntry> =
+                    factory.createArchiveInputStream(buffered)
                 var count = 0
+                var entry: org.apache.commons.compress.archivers.ArchiveEntry? = archive.nextEntry
                 while (entry != null && count < 500) {
-                    val sizeStr = if (entry.size >= 0) formatSize(entry.size) else "?"
-                    val dir = if (entry.isDirectory) "/" else ""
-                    sb.appendLine("  $sizeStr\t${entry.name}$dir")
+                    val e = entry!!
+                    val sizeStr = if (e.size >= 0) formatSize(e.size) else "?"
+                    val dir = if (e.isDirectory) "/" else ""
+                    sb.appendLine("  $sizeStr\t${e.name}$dir")
                     entry = archive.nextEntry
                     count++
                 }

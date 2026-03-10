@@ -1,0 +1,6 @@
+-keep class org.apache.poi.** { *; }
+-keep class com.tom_roush.pdfbox.** { *; }
+-dontwarn org.apache.**
+-dontwarn javax.**
+-dontwarn org.bouncycastle.**
+-dontwarn org.openxmlformats.**

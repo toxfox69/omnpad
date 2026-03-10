@@ -31,6 +31,7 @@ import com.energenai.omnpad.data.ExportFormat
 import com.energenai.omnpad.data.FileLoader
 import com.energenai.omnpad.ui.components.CodeEditor
 import com.energenai.omnpad.ui.components.HexViewer
+import com.energenai.omnpad.ui.components.PdfViewer
 import com.energenai.omnpad.ui.theme.*
 import com.energenai.omnpad.ui.viewmodels.EditorViewModel
 
@@ -53,6 +54,8 @@ fun EditorScreen(
 
     var showExportMenu by remember { mutableStateOf(false) }
     var pendingExportFormat by remember { mutableStateOf<ExportFormat?>(null) }
+    var showNewFileDialog by remember { mutableStateOf(false) }
+    var newFileName by remember { mutableStateOf("untitled.txt") }
 
     val saveAs = rememberLauncherForActivityResult(
         contract = ActivityResultContracts.CreateDocument("*/*")
@@ -65,6 +68,15 @@ fun EditorScreen(
                 pendingExportFormat = null
             } else {
                 FileLoader.save(context, uri, tab.content)
+                // Update tab URI so future saves go to this file
+                try {
+                    context.contentResolver.takePersistableUriPermission(
+                        uri,
+                        android.content.Intent.FLAG_GRANT_WRITE_URI_PERMISSION or
+                            android.content.Intent.FLAG_GRANT_READ_URI_PERMISSION
+                    )
+                } catch (_: Exception) {}
+                vm.updateFileUri(uri)
             }
         }
     }
@@ -115,7 +127,15 @@ fun EditorScreen(
                 }
                 // Save
                 if (vm.activeTab?.file?.isEditable == true) {
-                    IconButton(onClick = { vm.saveFile(context) }) {
+                    IconButton(onClick = {
+                        if (vm.activeTab?.file?.uri == Uri.EMPTY) {
+                            // New file — must Save As
+                            pendingExportFormat = null
+                            saveAs.launch(vm.activeTab?.file?.name ?: "untitled.txt")
+                        } else {
+                            vm.saveFile(context)
+                        }
+                    }) {
                         Icon(Icons.Default.Save, "Save", tint = Accent)
                     }
                 }
@@ -191,6 +211,10 @@ fun EditorScreen(
                     }) {
                         Icon(Icons.Default.SaveAs, "Save As", tint = TextSecondary)
                     }
+                }
+                // New file
+                IconButton(onClick = { showNewFileDialog = true }) {
+                    Icon(Icons.Default.NoteAdd, "New File", tint = Accent)
                 }
                 // Open file
                 IconButton(onClick = { filePicker.launch(arrayOf("*/*")) }) {
@@ -339,16 +363,29 @@ fun EditorScreen(
                         fontSize = 13.sp,
                     )
                     Spacer(Modifier.height(24.dp))
-                    FilledTonalButton(
-                        onClick = { filePicker.launch(arrayOf("*/*")) },
-                        colors = ButtonDefaults.filledTonalButtonColors(
-                            containerColor = Accent.copy(alpha = 0.15f),
-                            contentColor = Accent,
-                        ),
-                    ) {
-                        Icon(Icons.Default.FolderOpen, null, modifier = Modifier.size(18.dp))
-                        Spacer(Modifier.width(8.dp))
-                        Text("Open File")
+                    Row(horizontalArrangement = Arrangement.spacedBy(12.dp)) {
+                        FilledTonalButton(
+                            onClick = { showNewFileDialog = true },
+                            colors = ButtonDefaults.filledTonalButtonColors(
+                                containerColor = Cyan.copy(alpha = 0.15f),
+                                contentColor = Cyan,
+                            ),
+                        ) {
+                            Icon(Icons.Default.NoteAdd, null, modifier = Modifier.size(18.dp))
+                            Spacer(Modifier.width(8.dp))
+                            Text("New File")
+                        }
+                        FilledTonalButton(
+                            onClick = { filePicker.launch(arrayOf("*/*")) },
+                            colors = ButtonDefaults.filledTonalButtonColors(
+                                containerColor = Accent.copy(alpha = 0.15f),
+                                contentColor = Accent,
+                            ),
+                        ) {
+                            Icon(Icons.Default.FolderOpen, null, modifier = Modifier.size(18.dp))
+                            Spacer(Modifier.width(8.dp))
+                            Text("Open File")
+                        }
                     }
                 }
             }
@@ -368,15 +405,8 @@ fun EditorScreen(
                 )
             }
             FileCategory.PDF -> {
-                // Show extracted text (editable for copy/search)
-                CodeEditor(
-                    content = tab.content,
-                    language = null,
-                    onContentChange = {},
-                    readOnly = true,
-                    showLineNumbers = false,
-                    wordWrap = true,
-                )
+                // Render actual PDF pages with images/figures intact
+                PdfViewer(uri = tab.file.uri)
             }
             FileCategory.OFFICE -> {
                 CodeEditor(
@@ -453,6 +483,52 @@ fun EditorScreen(
                     }
                 }
             }
+        }
+
+        // New File dialog
+        if (showNewFileDialog) {
+            AlertDialog(
+                onDismissRequest = { showNewFileDialog = false },
+                containerColor = SurfaceVariant,
+                titleContentColor = TextPrimary,
+                title = { Text("New File") },
+                text = {
+                    OutlinedTextField(
+                        value = newFileName,
+                        onValueChange = { newFileName = it },
+                        label = { Text("File name", color = TextSecondary) },
+                        singleLine = true,
+                        modifier = Modifier.fillMaxWidth(),
+                        textStyle = LocalTextStyle.current.copy(
+                            fontFamily = FontFamily.Monospace,
+                            color = TextPrimary,
+                        ),
+                        colors = OutlinedTextFieldDefaults.colors(
+                            focusedBorderColor = Accent,
+                            unfocusedBorderColor = Border,
+                            cursorColor = Accent,
+                        ),
+                    )
+                },
+                confirmButton = {
+                    TextButton(onClick = {
+                        val name = newFileName.trim().ifEmpty { "untitled.txt" }
+                        vm.createNewFile(name)
+                        showNewFileDialog = false
+                        newFileName = "untitled.txt"
+                    }) {
+                        Text("Create", color = Accent)
+                    }
+                },
+                dismissButton = {
+                    TextButton(onClick = {
+                        showNewFileDialog = false
+                        newFileName = "untitled.txt"
+                    }) {
+                        Text("Cancel", color = TextSecondary)
+                    }
+                },
+            )
         }
     }
 }

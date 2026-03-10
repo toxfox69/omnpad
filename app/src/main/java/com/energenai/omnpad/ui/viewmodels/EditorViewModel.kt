@@ -6,7 +6,10 @@ import androidx.compose.runtime.mutableStateListOf
 import androidx.compose.runtime.mutableStateOf
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
+import com.energenai.omnpad.data.FileCategory
 import com.energenai.omnpad.data.FileLoader
+import com.energenai.omnpad.data.FileType
+import com.energenai.omnpad.data.FileTypes
 import com.energenai.omnpad.data.LoadedFile
 import kotlinx.coroutines.launch
 
@@ -83,6 +86,31 @@ class EditorViewModel : ViewModel() {
                 activeTabIndex.value > index -> activeTabIndex.value--
             }
         }
+    }
+
+    fun updateFileUri(uri: Uri) {
+        val idx = activeTabIndex.value
+        if (idx in tabs.indices) {
+            val tab = tabs[idx]
+            tabs[idx] = tab.copy(
+                file = tab.file.copy(uri = uri),
+                modified = false,
+            )
+        }
+    }
+
+    fun createNewFile(name: String) {
+        val type = FileTypes.detect(name)
+        val file = LoadedFile(
+            name = name,
+            uri = Uri.EMPTY,
+            type = type,
+            textContent = "",
+            size = 0,
+        )
+        val tab = Tab(file = file, content = "", modified = true)
+        tabs.add(tab)
+        activeTabIndex.value = tabs.size - 1
     }
 
     fun findNext(): IntRange? {

@@ -56,6 +56,7 @@ fun EditorScreen(
     var pendingExportFormat by remember { mutableStateOf<ExportFormat?>(null) }
     var showNewFileDialog by remember { mutableStateOf(false) }
     var newFileName by remember { mutableStateOf("untitled.txt") }
+    var pdfShowText by remember { mutableStateOf(false) }
 
     val saveAs = rememberLauncherForActivityResult(
         contract = ActivityResultContracts.CreateDocument("*/*")
@@ -64,7 +65,7 @@ fun EditorScreen(
             val tab = vm.activeTab ?: return@rememberLauncherForActivityResult
             val fmt = pendingExportFormat
             if (fmt != null) {
-                FileConverter.convert(context, tab.content, tab.file, fmt, uri)
+                vm.exportFile(context, fmt, uri)
                 pendingExportFormat = null
             } else {
                 FileLoader.save(context, uri, tab.content)
@@ -79,6 +80,52 @@ fun EditorScreen(
                 vm.updateFileUri(uri)
             }
         }
+    }
+
+    // New File dialog — outside Column so early returns don't skip it
+    if (showNewFileDialog) {
+        AlertDialog(
+            onDismissRequest = { showNewFileDialog = false },
+            containerColor = SurfaceVariant,
+            titleContentColor = TextPrimary,
+            title = { Text("New File") },
+            text = {
+                OutlinedTextField(
+                    value = newFileName,
+                    onValueChange = { newFileName = it },
+                    label = { Text("File name", color = TextSecondary) },
+                    singleLine = true,
+                    modifier = Modifier.fillMaxWidth(),
+                    textStyle = LocalTextStyle.current.copy(
+                        fontFamily = FontFamily.Monospace,
+                        color = TextPrimary,
+                    ),
+                    colors = OutlinedTextFieldDefaults.colors(
+                        focusedBorderColor = Accent,
+                        unfocusedBorderColor = Border,
+                        cursorColor = Accent,
+                    ),
+                )
+            },
+            confirmButton = {
+                TextButton(onClick = {
+                    val name = newFileName.trim().ifEmpty { "untitled.txt" }
+                    vm.createNewFile(name)
+                    showNewFileDialog = false
+                    newFileName = "untitled.txt"
+                }) {
+                    Text("Create", color = Accent)
+                }
+            },
+            dismissButton = {
+                TextButton(onClick = {
+                    showNewFileDialog = false
+                    newFileName = "untitled.txt"
+                }) {
+                    Text("Cancel", color = TextSecondary)
+                }
+            },
+        )
     }
 
     Column(
@@ -339,6 +386,25 @@ fun EditorScreen(
             return
         }
 
+        // Exporting banner
+        if (vm.isExporting.value) {
+            Row(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .background(Cyan.copy(alpha = 0.1f))
+                    .padding(12.dp),
+                verticalAlignment = Alignment.CenterVertically,
+            ) {
+                CircularProgressIndicator(
+                    color = Cyan,
+                    modifier = Modifier.size(16.dp),
+                    strokeWidth = 2.dp,
+                )
+                Spacer(Modifier.width(8.dp))
+                Text("Exporting...", color = Cyan, fontSize = 13.sp)
+            }
+        }
+
         // Content area
         val tab = vm.activeTab
         if (tab == null) {
@@ -405,8 +471,49 @@ fun EditorScreen(
                 )
             }
             FileCategory.PDF -> {
-                // Render actual PDF pages with images/figures intact
-                PdfViewer(uri = tab.file.uri)
+                Column(modifier = Modifier.fillMaxSize()) {
+                    // Toggle bar
+                    Row(
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .background(SurfaceVariant)
+                            .padding(horizontal = 12.dp, vertical = 4.dp),
+                        verticalAlignment = Alignment.CenterVertically,
+                    ) {
+                        Text(
+                            if (pdfShowText) "Text View" else "Page View",
+                            fontSize = 12.sp,
+                            color = TextSecondary,
+                        )
+                        Spacer(Modifier.weight(1f))
+                        Switch(
+                            checked = pdfShowText,
+                            onCheckedChange = { pdfShowText = it },
+                            colors = SwitchDefaults.colors(
+                                checkedThumbColor = Accent,
+                                checkedTrackColor = Accent.copy(alpha = 0.3f),
+                            ),
+                        )
+                        Spacer(Modifier.width(4.dp))
+                        Text(
+                            "Text",
+                            fontSize = 12.sp,
+                            color = if (pdfShowText) Accent else TextSecondary,
+                        )
+                    }
+                    if (pdfShowText) {
+                        CodeEditor(
+                            content = tab.content,
+                            language = null,
+                            onContentChange = {},
+                            readOnly = true,
+                            showLineNumbers = true,
+                            wordWrap = vm.wordWrap.value,
+                        )
+                    } else {
+                        PdfViewer(uri = tab.file.uri)
+                    }
+                }
             }
             FileCategory.OFFICE -> {
                 CodeEditor(
@@ -485,51 +592,6 @@ fun EditorScreen(
             }
         }
 
-        // New File dialog
-        if (showNewFileDialog) {
-            AlertDialog(
-                onDismissRequest = { showNewFileDialog = false },
-                containerColor = SurfaceVariant,
-                titleContentColor = TextPrimary,
-                title = { Text("New File") },
-                text = {
-                    OutlinedTextField(
-                        value = newFileName,
-                        onValueChange = { newFileName = it },
-                        label = { Text("File name", color = TextSecondary) },
-                        singleLine = true,
-                        modifier = Modifier.fillMaxWidth(),
-                        textStyle = LocalTextStyle.current.copy(
-                            fontFamily = FontFamily.Monospace,
-                            color = TextPrimary,
-                        ),
-                        colors = OutlinedTextFieldDefaults.colors(
-                            focusedBorderColor = Accent,
-                            unfocusedBorderColor = Border,
-                            cursorColor = Accent,
-                        ),
-                    )
-                },
-                confirmButton = {
-                    TextButton(onClick = {
-                        val name = newFileName.trim().ifEmpty { "untitled.txt" }
-                        vm.createNewFile(name)
-                        showNewFileDialog = false
-                        newFileName = "untitled.txt"
-                    }) {
-                        Text("Create", color = Accent)
-                    }
-                },
-                dismissButton = {
-                    TextButton(onClick = {
-                        showNewFileDialog = false
-                        newFileName = "untitled.txt"
-                    }) {
-                        Text("Cancel", color = TextSecondary)
-                    }
-                },
-            )
-        }
     }
 }
 

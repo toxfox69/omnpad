@@ -86,8 +86,8 @@ object FileConverter {
     }
 
     /**
-     * PDF → DOCX: Renders each PDF page as an image and embeds it in the DOCX,
-     * plus extracts text per page below each image for searchability.
+     * PDF → DOCX: Renders each page as a compressed JPEG and embeds in DOCX.
+     * Processes one page at a time to avoid OOM on mobile devices.
      */
     private fun convertPdfToDocxWithImages(
         context: Context,
@@ -97,82 +97,77 @@ object FileConverter {
     ) {
         val doc = XWPFDocument()
 
-        // Set page margins to narrow (0.5 inch)
         val sectPr = doc.document.body.addNewSectPr()
         val pgMar = sectPr.addNewPgMar()
-        pgMar.top = 720.toBigInteger()    // 0.5"
+        pgMar.top = 720.toBigInteger()
         pgMar.bottom = 720.toBigInteger()
         pgMar.left = 720.toBigInteger()
         pgMar.right = 720.toBigInteger()
 
         val fd = context.contentResolver.openFileDescriptor(pdfUri, "r") ?: return
         val renderer = PdfRenderer(fd)
+        val pageCount = renderer.pageCount
 
-        // Also extract images from PDFBox if available
-        val pdfImages = extractPdfImages(context, pdfUri)
-
-        for (i in 0 until renderer.pageCount) {
+        for (i in 0 until pageCount) {
             val page = renderer.openPage(i)
 
-            // Render page as bitmap
-            val scale = 2
+            // 1x scale + JPEG to keep memory low
             val bitmap = Bitmap.createBitmap(
-                page.width * scale,
-                page.height * scale,
+                page.width,
+                page.height,
                 Bitmap.Config.ARGB_8888
             )
             bitmap.eraseColor(android.graphics.Color.WHITE)
             page.render(bitmap, null, null, PdfRenderer.Page.RENDER_MODE_FOR_PRINT)
 
-            // Convert bitmap to PNG bytes
             val baos = ByteArrayOutputStream()
-            bitmap.compress(Bitmap.CompressFormat.PNG, 95, baos)
-            val pngBytes = baos.toByteArray()
+            bitmap.compress(Bitmap.CompressFormat.JPEG, 80, baos)
+            val jpegBytes = baos.toByteArray()
+            val pageWidth = page.width
+            val pageHeight = page.height
             bitmap.recycle()
             page.close()
 
-            // Add page header
+            // Page header
             val headerPara = doc.createParagraph()
             headerPara.alignment = ParagraphAlignment.LEFT
             val headerRun = headerPara.createRun()
             headerRun.isBold = true
             headerRun.fontSize = 10
             headerRun.color = "666666"
-            headerRun.setText("— Page ${i + 1} of ${renderer.pageCount} —")
+            headerRun.setText("— Page ${i + 1} of $pageCount —")
 
-            // Embed page image in DOCX
+            // Embed image
             val imgPara = doc.createParagraph()
             imgPara.alignment = ParagraphAlignment.CENTER
             val imgRun = imgPara.createRun()
-            val imgStream = ByteArrayInputStream(pngBytes)
-            // Scale to fit page width (6.5 inches usable with 0.5" margins)
-            val targetWidthEmu = Units.toEMU(468.0) // 6.5 inches in points
-            val aspectRatio = (page.height * scale).toDouble() / (page.width * scale).toDouble()
+            val imgStream = ByteArrayInputStream(jpegBytes)
+            val targetWidthEmu = Units.toEMU(468.0)
+            val aspectRatio = pageHeight.toDouble() / pageWidth.toDouble()
             val targetHeightEmu = (targetWidthEmu * aspectRatio).toInt()
             imgRun.addPicture(
                 imgStream,
-                Document.PICTURE_TYPE_PNG,
-                "page_${i + 1}.png",
+                Document.PICTURE_TYPE_JPEG,
+                "page_${i + 1}.jpg",
                 targetWidthEmu,
                 targetHeightEmu,
             )
             imgStream.close()
 
-            // Add page break after each page (except last)
-            if (i < renderer.pageCount - 1) {
+            if (i < pageCount - 1) {
                 val breakPara = doc.createParagraph()
                 breakPara.isPageBreak = true
             }
         }
 
-        // Append extracted text at the end for searchability
+        // Append extracted text for searchability
         if (extractedText.isNotBlank()) {
             val textHeader = doc.createParagraph()
             textHeader.isPageBreak = true
             val textHeaderRun = textHeader.createRun()
             textHeaderRun.isBold = true
             textHeaderRun.fontSize = 14
-            textHeaderRun.setText("Extracted Text (Searchable)")
+            textHeaderRun.setText("Extracted Text")
 
             for (line in extractedText.split('\n')) {
                 val para = doc.createParagraph()
@@ -190,34 +185,6 @@ object FileConverter {
             doc.write(stream)
         }
         doc.close()
-    }
-
-    /**
-     * Extract embedded images from a PDF using PDFBox
-     */
-    private fun extractPdfImages(context: Context, uri: Uri): List<ByteArray> {
-        val images = mutableListOf<ByteArray>()
-        try {
-            context.contentResolver.openInputStream(uri)?.use { stream ->
-                val pdfDoc = com.tom_roush.pdfbox.pdmodel.PDDocument.load(stream)
-                for (page in pdfDoc.pages) {
-                    val resources = page.resources
-                    for (name in resources.xObjectNames) {
-                        val xobj = resources.getXObject(name)
-                        if (xobj is com.tom_roush.pdfbox.pdmodel.graphics.image.PDImageXObject) {
-                            val baos = ByteArrayOutputStream()
-                            val img = xobj.image
-                            img.compress(Bitmap.CompressFormat.PNG, 95, baos)
-                            images.add(baos.toByteArray())
-                        }
-                    }
-                }
-                pdfDoc.close()
-            }
-        } catch (_: Exception) {
-            // PDFBox image extraction is best-effort
-        }
-        return images
     }
 
     /**

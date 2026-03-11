@@ -6,12 +6,16 @@ import androidx.compose.runtime.mutableStateListOf
 import androidx.compose.runtime.mutableStateOf
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
+import com.energenai.omnpad.data.ExportFormat
 import com.energenai.omnpad.data.FileCategory
+import com.energenai.omnpad.data.FileConverter
 import com.energenai.omnpad.data.FileLoader
 import com.energenai.omnpad.data.FileType
 import com.energenai.omnpad.data.FileTypes
 import com.energenai.omnpad.data.LoadedFile
+import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.launch
+import kotlinx.coroutines.withContext
 
 data class Tab(
     val file: LoadedFile,
@@ -111,6 +115,28 @@ class EditorViewModel : ViewModel() {
         val tab = Tab(file = file, content = "", modified = true)
         tabs.add(tab)
         activeTabIndex.value = tabs.size - 1
+    }
+
+    val isExporting = mutableStateOf(false)
+
+    fun exportFile(context: Context, format: ExportFormat, outputUri: Uri) {
+        val tab = activeTab ?: return
+        isExporting.value = true
+        error.value = null
+        viewModelScope.launch {
+            try {
+                val success = withContext(Dispatchers.IO) {
+                    FileConverter.convert(context, tab.content, tab.file, format, outputUri)
+                }
+                if (!success) {
+                    error.value = "Export failed"
+                }
+            } catch (e: Exception) {
+                error.value = "Export failed: ${e.message}"
+            } finally {
+                isExporting.value = false
+            }
+        }
     }
 
     fun findNext(): IntRange? {

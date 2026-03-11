@@ -9,7 +9,9 @@ import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.lazy.LazyRow
 import androidx.compose.foundation.lazy.itemsIndexed
+import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.RoundedCornerShape
+import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.*
 import androidx.compose.material3.*
@@ -82,7 +84,7 @@ fun EditorScreen(
         }
     }
 
-    // New File dialog — outside Column so early returns don't skip it
+    // New File dialog with templates
     if (showNewFileDialog) {
         AlertDialog(
             onDismissRequest = { showNewFileDialog = false },
@@ -90,22 +92,54 @@ fun EditorScreen(
             titleContentColor = TextPrimary,
             title = { Text("New File") },
             text = {
-                OutlinedTextField(
-                    value = newFileName,
-                    onValueChange = { newFileName = it },
-                    label = { Text("File name", color = TextSecondary) },
-                    singleLine = true,
-                    modifier = Modifier.fillMaxWidth(),
-                    textStyle = LocalTextStyle.current.copy(
-                        fontFamily = FontFamily.Monospace,
-                        color = TextPrimary,
-                    ),
-                    colors = OutlinedTextFieldDefaults.colors(
-                        focusedBorderColor = Accent,
-                        unfocusedBorderColor = Border,
-                        cursorColor = Accent,
-                    ),
-                )
+                Column(modifier = Modifier.verticalScroll(rememberScrollState())) {
+                    OutlinedTextField(
+                        value = newFileName,
+                        onValueChange = { newFileName = it },
+                        label = { Text("File name", color = TextSecondary) },
+                        singleLine = true,
+                        modifier = Modifier.fillMaxWidth(),
+                        textStyle = LocalTextStyle.current.copy(
+                            fontFamily = FontFamily.Monospace,
+                            color = TextPrimary,
+                        ),
+                        colors = OutlinedTextFieldDefaults.colors(
+                            focusedBorderColor = Accent,
+                            unfocusedBorderColor = Border,
+                            cursorColor = Accent,
+                        ),
+                    )
+                    Spacer(Modifier.height(12.dp))
+                    Text("Templates", fontSize = 12.sp, color = TextSecondary)
+                    Spacer(Modifier.height(6.dp))
+                    DocumentTemplates.all.forEach { tmpl ->
+                        Row(
+                            modifier = Modifier
+                                .fillMaxWidth()
+                                .clip(RoundedCornerShape(6.dp))
+                                .clickable {
+                                    newFileName = tmpl.fileName
+                                    vm.createNewFile(tmpl.fileName, tmpl.content)
+                                    showNewFileDialog = false
+                                    newFileName = "untitled.txt"
+                                }
+                                .padding(horizontal = 8.dp, vertical = 10.dp),
+                            verticalAlignment = Alignment.CenterVertically,
+                        ) {
+                            Icon(
+                                tmpl.icon,
+                                contentDescription = null,
+                                tint = tmpl.color,
+                                modifier = Modifier.size(20.dp),
+                            )
+                            Spacer(Modifier.width(10.dp))
+                            Column {
+                                Text(tmpl.label, fontSize = 14.sp, color = TextPrimary)
+                                Text(tmpl.description, fontSize = 11.sp, color = TextSecondary)
+                            }
+                        }
+                    }
+                }
             },
             confirmButton = {
                 TextButton(onClick = {
@@ -114,7 +148,7 @@ fun EditorScreen(
                     showNewFileDialog = false
                     newFileName = "untitled.txt"
                 }) {
-                    Text("Create", color = Accent)
+                    Text("Blank", color = Accent)
                 }
             },
             dismissButton = {
@@ -617,4 +651,191 @@ private fun fileColor(category: FileCategory) = when (category) {
     FileCategory.IMAGE -> SynString
     FileCategory.ARCHIVE -> SynNumber
     else -> TextPrimary
+}
+
+private data class DocTemplate(
+    val label: String,
+    val description: String,
+    val fileName: String,
+    val icon: androidx.compose.ui.graphics.vector.ImageVector,
+    val color: androidx.compose.ui.graphics.Color,
+    val content: String,
+)
+
+private object DocumentTemplates {
+    val all = listOf(
+        DocTemplate(
+            "Meeting Notes",
+            "Date, attendees, agenda, action items",
+            "meeting-notes.md",
+            Icons.Default.Groups,
+            Cyan,
+            """# Meeting Notes
+## Date: ${java.time.LocalDate.now()}
+## Attendees:
+-
+
+## Agenda:
+1.
+
+## Discussion:
+
+
+## Action Items:
+- [ ]
+- [ ]
+
+## Next Meeting:
+""",
+        ),
+        DocTemplate(
+            "Letter / Memo",
+            "Formal letter with header and signature",
+            "letter.txt",
+            Icons.Default.Email,
+            Amber,
+            """${java.time.LocalDate.now()}
+
+[Recipient Name]
+[Title]
+[Organization]
+[Address]
+
+Dear [Recipient],
+
+[Body]
+
+Sincerely,
+
+[Your Name]
+[Your Title]
+""",
+        ),
+        DocTemplate(
+            "Invoice",
+            "CSV invoice with line items",
+            "invoice.csv",
+            Icons.Default.Receipt,
+            Accent,
+            """Item,Quantity,Unit Price,Total
+"Service/Product 1",1,0.00,0.00
+"Service/Product 2",1,0.00,0.00
+,,Subtotal,0.00
+,,Tax,0.00
+,,TOTAL,0.00
+""",
+        ),
+        DocTemplate(
+            "Project README",
+            "Markdown project documentation",
+            "README.md",
+            Icons.Default.Article,
+            Magenta,
+            """# Project Name
+
+## Overview
+Brief description of the project.
+
+## Features
+- Feature 1
+- Feature 2
+
+## Installation
+```
+instructions here
+```
+
+## Usage
+```
+usage examples
+```
+
+## License
+""",
+        ),
+        DocTemplate(
+            "Report",
+            "Structured report with sections",
+            "report.md",
+            Icons.Default.Assessment,
+            SynString,
+            """# Report Title
+**Author:** [Name]
+**Date:** ${java.time.LocalDate.now()}
+
+## Executive Summary
+
+
+## Background
+
+
+## Findings
+
+
+## Recommendations
+1.
+2.
+
+## Conclusion
+
+""",
+        ),
+        DocTemplate(
+            "Task List",
+            "Markdown checklist",
+            "tasks.md",
+            Icons.Default.Checklist,
+            Accent,
+            """# Tasks
+
+## Priority
+- [ ]
+- [ ]
+
+## In Progress
+- [ ]
+
+## Completed
+- [x]
+""",
+        ),
+        DocTemplate(
+            "JSON Config",
+            "JSON configuration file",
+            "config.json",
+            Icons.Default.DataObject,
+            Amber,
+            """{
+  "name": "",
+  "version": "1.0.0",
+  "settings": {
+    "key": "value"
+  }
+}
+""",
+        ),
+        DocTemplate(
+            "HTML Page",
+            "Basic HTML5 page",
+            "page.html",
+            Icons.Default.Code,
+            Cyan,
+            """<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Page Title</title>
+    <style>
+        body { font-family: sans-serif; max-width: 800px; margin: 2rem auto; padding: 0 1rem; }
+    </style>
+</head>
+<body>
+    <h1>Title</h1>
+    <p>Content goes here.</p>
+</body>
+</html>
+""",
+        ),
+    )
 }

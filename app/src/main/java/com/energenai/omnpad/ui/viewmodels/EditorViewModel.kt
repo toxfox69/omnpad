@@ -103,16 +103,16 @@ class EditorViewModel : ViewModel() {
         }
     }
 
-    fun createNewFile(name: String) {
+    fun createNewFile(name: String, template: String = "") {
         val type = FileTypes.detect(name)
         val file = LoadedFile(
             name = name,
             uri = Uri.EMPTY,
             type = type,
-            textContent = "",
+            textContent = template,
             size = 0,
         )
-        val tab = Tab(file = file, content = "", modified = true)
+        val tab = Tab(file = file, content = template, modified = true)
         tabs.add(tab)
         activeTabIndex.value = tabs.size - 1
     }

@@ -4,3 +4,14 @@
 -dontwarn javax.**
 -dontwarn org.bouncycastle.**
 -dontwarn org.openxmlformats.**
+-dontwarn com.gemalto.**
+-dontwarn org.w3c.**
+-dontwarn org.slf4j.**
+-dontwarn com.sun.**
+-dontwarn org.etsi.**
+-dontwarn org.osgi.**
+-dontwarn com.graphbuilder.**
+-dontwarn com.zaxxer.**
+-dontwarn org.checkerframework.**
+-dontwarn com.google.errorprone.**
+-dontwarn aQute.**

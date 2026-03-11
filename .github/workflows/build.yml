@@ -28,12 +28,20 @@ jobs:
       - name: Make wrapper executable
         run: chmod +x gradlew
 
-      - name: Build Debug APK
-        run: ./gradlew assembleDebug --no-daemon
+      - name: Decode keystore
+        run: echo "${{ secrets.KEYSTORE_BASE64 }}" | base64 -d > omnpad-release.jks
+
+      - name: Build Release APK
+        env:
+          KEYSTORE_PATH: ${{ github.workspace }}/omnpad-release.jks
+          KEYSTORE_PASSWORD: ${{ secrets.KEYSTORE_PASSWORD }}
+          KEY_ALIAS: ${{ secrets.KEY_ALIAS }}
+          KEY_PASSWORD: ${{ secrets.KEY_PASSWORD }}
+        run: ./gradlew assembleRelease --no-daemon
 
       - name: Upload APK
         uses: actions/upload-artifact@v4
         with:
-          name: omnpad-debug
-          path: app/build/outputs/apk/debug/app-debug.apk
+          name: omnpad-release
+          path: app/build/outputs/apk/release/app-release.apk
           retention-days: 30
